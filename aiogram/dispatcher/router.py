@@ -24,13 +24,13 @@ class Router:
     - By decorator - :obj:`@router.<event_type>(<filters, ...>)`
     """
 
-    def __init__(self, *, name: str | None = None) -> None:
+    def __init__(self, *, name: str | None = None, dispatch_all: bool = False) -> None:
         """
         :param name: Optional router name, can be useful for debugging
         """
 
         self.name = name or hex(id(self))
-
+        self.dispatch_all = dispatch_all
         self._parent_router: Router | None = None
         self.sub_routers: list[Router] = []
 
@@ -167,36 +167,30 @@ class Router:
             return await observer.wrap_outer_middleware(_wrapped, event=event, data=kwargs)
         return await _wrapped(event, **kwargs)
 
-    async def _propagate_event(
-        self,
-        observer: TelegramEventObserver | None,
-        update_type: str,
-        event: TelegramObject,
-        **kwargs: Any,
-    ) -> Any:
+    async def _propagate_event(self, observer: TelegramEventObserver | None, update_type: str, event: TelegramObject, **kwargs: Any) -> Any:
         response = UNHANDLED
+        
         if observer:
             # Check globally defined filters before any other handler will be checked.
-            # This check is placed here instead of `trigger` method to add possibility
-            # to pass context to handlers from global filters.
             result, data = await observer.check_root_filters(event, **kwargs)
             if not result:
                 return UNHANDLED
             kwargs.update(data)
 
             response = await observer.trigger(event, **kwargs)
-            if response is REJECTED:  # pragma: no cover
-                # Possible only if some handler returns REJECTED
+            if response is REJECTED:
                 return UNHANDLED
-            if response is not UNHANDLED:
+            
+            if not self.dispatch_all and response is not UNHANDLED:
                 return response
 
         for router in self.sub_routers:
-            response = await router.propagate_event(update_type=update_type, event=event, **kwargs)
-            if response is not UNHANDLED:
-                break
+            sub_response = await router.propagate_event(update_type=update_type, event=event, **kwargs)
 
-        return response
+            if not self.dispatch_all and sub_response is not UNHANDLED:
+                return sub_response
+
+        return UNHANDLED
 
     @property
     def chain_head(self) -> Generator[Router, None, None]:

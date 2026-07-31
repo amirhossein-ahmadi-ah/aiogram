@@ -48,6 +48,7 @@ class Dispatcher(Router):
         events_isolation: BaseEventIsolation | None = None,
         disable_fsm: bool = False,
         name: str | None = None,
+        dispatch_all: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -60,7 +61,7 @@ class Dispatcher(Router):
             then you should not use storage and events isolation
         :param kwargs: Other arguments, will be passed as keyword arguments to handlers
         """
-        super().__init__(name=name)
+        super().__init__(name=name, dispatch_all=dispatch_all)
 
         if storage and not isinstance(storage, BaseStorage):
             msg = f"FSM storage should be instance of 'BaseStorage' not {type(storage).__name__}"
