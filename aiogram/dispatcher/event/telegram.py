@@ -110,9 +110,19 @@ class TelegramEventObserver:
 
     async def trigger(self, event: TelegramObject, **kwargs: Any) -> Any:
         """
-        Propagate event to handlers and stops propagation on first match.
-        Handler will be called when all its filters are pass.
+        Propagate event to handlers.
+
+        By default (router.dispatch_all is False) stops propagation on first
+        match: handler will be called when all its filters pass, and its
+        response is returned immediately.
+
+        If router.dispatch_all is True, every handler whose filters pass gets
+        called (not just the first one); the response of the last handler
+        that returns something other than UNHANDLED is returned.
         """
+        dispatch_all = self.router.dispatch_all
+        response: Any = UNHANDLED
+
         for handler in self.handlers:
             kwargs["handler"] = handler
             result, data = await handler.check(event, **kwargs)
@@ -123,11 +133,17 @@ class TelegramEventObserver:
                         self._resolve_middlewares(),
                         handler.call,
                     )
-                    return await wrapped_inner(event, kwargs)
+                    handler_response = await wrapped_inner(event, kwargs)
                 except SkipHandler:
                     continue
 
-        return UNHANDLED
+                if not dispatch_all:
+                    return handler_response
+
+                if handler_response is not UNHANDLED:
+                    response = handler_response
+
+        return response
 
     def __call__(
         self,

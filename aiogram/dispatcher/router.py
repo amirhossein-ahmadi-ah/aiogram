@@ -30,7 +30,7 @@ class Router:
         """
 
         self.name = name or hex(id(self))
-        self.dispatch_all = dispatch_all
+        self._dispatch_all = dispatch_all
         self._parent_router: Router | None = None
         self.sub_routers: list[Router] = []
 
@@ -123,6 +123,27 @@ class Router:
             "subscription": self.subscription,
             "error": self.errors,
         }
+
+    @property
+    def dispatch_all(self) -> bool:
+        """
+        Whether this router (and consequently its observers) should propagate
+        an event to ALL matching handlers/sub-routers instead of stopping at
+        the first one that returns a non-UNHANDLED response.
+
+        Inherited from the parent router if not explicitly enabled on this one,
+        so setting it once on the Dispatcher (root router) turns it on for the
+        whole router tree.
+        """
+        if self._dispatch_all:
+            return True
+        if self._parent_router is not None:
+            return self._parent_router.dispatch_all
+        return False
+
+    @dispatch_all.setter
+    def dispatch_all(self, value: bool) -> None:
+        self._dispatch_all = value
 
     def __str__(self) -> str:
         return f"{type(self).__name__} {self.name!r}"
